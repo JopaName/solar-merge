@@ -8,6 +8,13 @@ export default class BootScene extends Phaser.Scene {
     super('BootScene')
   }
 
+  /* ───── PRELOAD ───── */
+  preload() {
+    for (let i = 1; i <= 10; i++) {
+      this.load.image(`panel_${i}`, `assets/panels/panel_${i}.png`)
+    }
+  }
+
   /* ───── CREATE ───── */
   create() {
     this.cameras.main.setBackgroundColor('#1a1a2e')

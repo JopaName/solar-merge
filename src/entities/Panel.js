@@ -1,10 +1,6 @@
-// Цвета панелей в зависимости от уровня
 const TIER_STYLES = {
-  // tier 1-3: серый
   gray:  { fill: 0x808080, stroke: 0xa0a0a0 },
-  // tier 4-6: синий
   blue:  { fill: 0x4a90e2, stroke: 0x6ab0ff },
-  // tier 7-9: золотой
   gold:  { fill: 0xf39c12, stroke: 0xf5c842 },
 }
 
@@ -12,47 +8,69 @@ function getStyle(tier) {
   if (tier <= 3) return TIER_STYLES.gray
   if (tier <= 6) return TIER_STYLES.blue
   if (tier <= 9) return TIER_STYLES.gold
-  // tier 10 — вернём золотой, мигание сделаем в create()
   return TIER_STYLES.gold
 }
 
-export default class Panel extends Phaser.GameObjects.Rectangle {
+export default class Panel extends Phaser.GameObjects.Container {
   constructor(scene, x, y, tier) {
-    const style = getStyle(tier)
-    super(scene, x, y, 64, 64, style.fill, 1)
+    super(scene, x, y)
 
     this.tier = tier
     this.power = tier * 10
     this.gridX = -1
     this.gridY = -1
-
-    // Настройка визуала
-    this.setStrokeStyle(2, style.stroke, 1)
-
-    // Текст с номером уровня
-    this.label = scene.add.text(x, y, `${tier}`, {
-      fontSize: '20px',
-      fontFamily: 'Arial',
-      color: '#ffffff',
-      fontStyle: 'bold',
-    }).setOrigin(0.5)
-
-    // Интерактивность
-    this.setInteractive({ useHandCursor: true })
-    this.setDepth(1)
-
-    // Мигание для 10-го уровня
-    if (tier === 10) {
-      scene.tweens.add({
-        targets: this,
-        alpha: { from: 1, to: 0.3 },
-        duration: 500,
-        yoyo: true,
-        repeat: -1,
-      })
-    }
+    this.label = null
+    this.shadow = null
+    this.sprite = null
+    this.fallbackRect = null
 
     scene.add.existing(this)
+    this.buildVisual(scene)
+  }
+
+  buildVisual(scene) {
+    const key = `panel_${this.tier}`
+    const hasSprite = scene.textures.exists(key)
+
+    // Тень
+    this.shadow = scene.add.ellipse(2, 66, 50, 12, 0x000000, 0.3)
+    this.add(this.shadow)
+
+    if (hasSprite) {
+      this.sprite = scene.add.image(0, 0, key)
+      this.sprite.setDisplaySize(64, 64)
+      this.add(this.sprite)
+      this.setSize(64, 64)
+    } else {
+      const style = getStyle(this.tier)
+      this.fallbackRect = scene.add.rectangle(0, 0, 64, 64, style.fill, 1)
+      this.fallbackRect.setStrokeStyle(2, style.stroke, 1)
+      this.add(this.fallbackRect)
+      this.setSize(64, 64)
+
+      if (this.tier === 10) {
+        scene.tweens.add({
+          targets: this.fallbackRect,
+          alpha: { from: 1, to: 0.3 },
+          duration: 500,
+          yoyo: true,
+          repeat: -1,
+        })
+      }
+    }
+
+    this.label = scene.add.text(0, hasSprite ? 36 : 0, `${this.tier}`, {
+      fontSize: hasSprite ? '12px' : '20px',
+      fontFamily: 'Arial',
+      color: hasSprite ? '#ffffff' : '#ffffff',
+      fontStyle: 'bold',
+      stroke: hasSprite ? '#000000' : undefined,
+      strokeThickness: hasSprite ? 3 : 0,
+    }).setOrigin(0.5)
+    this.add(this.label)
+
+    this.setInteractive(new Phaser.Geom.Rectangle(-32, -32, 64, 64), Phaser.Geom.Rectangle.Contains)
+    this.setDepth(1)
   }
 
   setGridPos(gx, gy) {
@@ -60,14 +78,11 @@ export default class Panel extends Phaser.GameObjects.Rectangle {
     this.gridY = gy
   }
 
-  // Обновляем позицию и текст
   setPanelPosition(x, y) {
     this.setPosition(x, y)
-    this.label.setPosition(x, y)
   }
 
   destroy() {
-    this.label.destroy()
     super.destroy()
   }
 }
