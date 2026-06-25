@@ -10,7 +10,8 @@
     "zip": "node -e \"const { spawn } = require('child_process'); const a = spawn('powershell', ['Compress-Archive', '-Path', 'dist/*', '-DestinationPath', 'solar-merge.zip', '-Force'], { shell: true, stdio: 'inherit' }); a.on('exit', () => console.log('solar-merge.zip created'))\""
   },
   "dependencies": {
-    "phaser": "^3.80.1"
+    "phaser": "^3.80.1",
+    "sharp": "^0.35.2"
   },
   "devDependencies": {
     "vite": "^5.4.0"
