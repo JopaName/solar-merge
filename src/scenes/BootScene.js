@@ -5,6 +5,8 @@ import OrderSystem from '../systems/OrderSystem.js'
 import ParticleSystem from '../utils/ParticleSystem.js'
 import Toast from '../utils/Toast.js'
 import Tutorial from '../systems/Tutorial.js'
+import UpgradeSystem, { UPGRADES } from '../systems/UpgradeSystem.js'
+import BoostSystem from '../systems/BoostSystem.js'
 
 export default class BootScene extends Phaser.Scene {
   constructor() {
@@ -31,6 +33,8 @@ export default class BootScene extends Phaser.Scene {
     this.musicEnabled = true
 
     this.orderSystem = new OrderSystem(this)
+    this.upgradeSystem = new UpgradeSystem(this)
+    this.boostSystem = new BoostSystem(this)
     this.tutorial = new Tutorial(this)
 
     this.COLS = 5
@@ -79,6 +83,13 @@ export default class BootScene extends Phaser.Scene {
       delay: 2000,
       loop: true,
       callback: () => this.collectEnergyParticles(),
+    })
+
+    // Таймер обновления бустов каждую секунду
+    this.time.addEvent({
+      delay: 1000,
+      loop: true,
+      callback: () => this.updateBoostTimer(),
     })
 
     // Туториал после небольшой задержки
@@ -139,6 +150,21 @@ export default class BootScene extends Phaser.Scene {
     this.topCoinsText = this.add.text(700, 30, '🪙 100', {
       fontSize: '18px', fontFamily: 'Arial', color: '#ffd700', fontStyle: 'bold',
     }).setOrigin(0, 0.5).setDepth(1)
+
+    // Кнопки апгрейдов и бустов
+    const upgradeBtn = this.add.text(735, 18, '⬆️', {
+      fontSize: '16px', fontFamily: 'Arial',
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(1)
+    upgradeBtn.on('pointerdown', () => this.showUpgrades())
+
+    this.boostTimerText = this.add.text(735, 42, '', {
+      fontSize: '8px', fontFamily: 'Arial', color: '#ff9800',
+    }).setOrigin(0.5).setDepth(1)
+
+    const boostsBtn = this.add.text(755, 30, '🚀', {
+      fontSize: '16px', fontFamily: 'Arial',
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(1)
+    boostsBtn.on('pointerdown', () => this.showBoosts())
 
     // Кнопка настроек ⚙️
     const settingsBtn = this.add.text(775, 30, '⚙️', {
@@ -258,7 +284,7 @@ export default class BootScene extends Phaser.Scene {
 
   updateEnergy() {
     this.energy = 0
-    for (let r = 0; r < this.ROWS; r++) { for (let c = 0; c < this.COLS; c++) { if (this.gridCells[r][c].occupied && this.gridCells[r][c].panel) { this.energy += this.gridCells[r][c].panel.power } } }
+    for (let r = 0; r < this.ROWS; r++) { for (let c = 0; c < this.COLS; c++) { if (this.gridCells[r][c].occupied && this.gridCells[r][c].panel) { this.energy += this.gridCells[r][c].panel.getEffectivePower() } } }
     this.refreshTopBarUI()
     this.refreshOrdersUI()
   }
@@ -441,6 +467,175 @@ export default class BootScene extends Phaser.Scene {
     return { x: this.GRID_X + col * this.CELL_SIZE + this.CELL_SIZE / 2, y: this.GRID_Y + row * this.CELL_SIZE + this.CELL_SIZE / 2 }
   }
 
+  updateBoostTimer() {
+    this.boostSystem.cleanExpired()
+    const active = this.boostSystem.activeBoosts
+    if (active.length > 0) {
+      const remaining = Math.max(...active.map(b => this.boostSystem.getRemainingSeconds(b.id)))
+      this.boostTimerText.setText(`🕐${remaining}с`)
+    } else {
+      this.boostTimerText.setText('')
+    }
+  }
+
+  /* ==================== GRID REBUILD ==================== */
+  rebuildGrid() {
+    const newSize = this.upgradeSystem.getGridSize()
+    if (newSize === this.COLS && newSize === this.ROWS) return
+
+    // Сохраняем старые панели
+    const oldPanels = []
+    for (let r = 0; r < this.ROWS; r++) {
+      for (let c = 0; c < this.COLS; c++) {
+        if (this.gridCells[r][c].occupied && this.gridCells[r][c].panel) {
+          oldPanels.push({ tier: this.gridCells[r][c].panel.tier })
+          this.gridCells[r][c].panel.destroy()
+        }
+      }
+    }
+
+    this.COLS = newSize
+    this.ROWS = newSize
+
+    this.gridCells = []
+    for (let row = 0; row < this.ROWS; row++) {
+      this.gridCells[row] = []
+      for (let col = 0; col < this.COLS; col++) {
+        const cx = this.GRID_X + col * this.CELL_SIZE + this.CELL_SIZE / 2
+        const cy = this.GRID_Y + row * this.CELL_SIZE + this.CELL_SIZE / 2
+        this.gridCells[row][col] = { x: cx, y: cy, occupied: false, panel: null }
+      }
+    }
+
+    // Перерисовываем сетку
+    this.drawGrid()
+
+    // Размещаем старые панели
+    for (const p of oldPanels) {
+      const empty = []
+      for (let r = 0; r < this.ROWS; r++) { for (let c = 0; c < this.COLS; c++) { if (!this.gridCells[r][c].occupied) empty.push({ row: r, col: c }) } }
+      if (empty.length === 0) break
+      const cell = Phaser.Math.RND.pick(empty)
+      this.spawnPanelAt(p.tier, cell.row, cell.col)
+    }
+
+    this.toast.show(`Сетка расширена до ${newSize}×${newSize}!`, 'success')
+  }
+
+  resetEnergyTimer() {
+    if (this.energyTimer) this.energyTimer.remove()
+    const delay = this.upgradeSystem.getGenerationDelay()
+    this.energyTimer = this.time.addEvent({ delay, loop: true, callback: () => this.collectEnergyParticles() })
+  }
+
+  /* ==================== UPGRADES POPUP ==================== */
+  showUpgrades() {
+    const popup = this.add.container(400, 300).setDepth(300)
+    const bg = this.add.rectangle(0, 0, 380, 360, 0x1a1a3e, 0.95).setStrokeStyle(2, 0xffd700, 0.8)
+
+    const title = this.add.text(0, -160, 'Апгрейды', { fontSize: '18px', fontFamily: 'Arial', color: '#ffd700', fontStyle: 'bold' }).setOrigin(0.5)
+
+    const items = []
+    const upgradeDefs = Object.values(UPGRADES)
+    const startY = -120
+    const yOffset = 60
+
+    upgradeDefs.forEach((def, i) => {
+      const y = startY + i * yOffset
+      const level = this.upgradeSystem.getLevel(def.id)
+      const isMax = this.upgradeSystem.isMaxLevel(def.id)
+      const cost = this.upgradeSystem.getCost(def.id)
+      const canBuy = this.coins >= cost && !isMax
+
+      const itemBg = this.add.rectangle(0, y, 350, 50, 0x000000, 0.4).setStrokeStyle(1, 0x4a90e2, 0.2)
+
+      const iconTxt = this.add.text(-160, y - 8, def.icon, { fontSize: '14px', fontFamily: 'Arial' }).setOrigin(0, 0.5)
+      const nameTxt = this.add.text(-140, y - 8, def.name, { fontSize: '12px', fontFamily: 'Arial', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0, 0.5)
+      const levelTxt = this.add.text(-140, y + 10, `Ур. ${level}/${def.maxLevel}`, { fontSize: '10px', fontFamily: 'Arial', color: '#aaaaaa' }).setOrigin(0, 0.5)
+
+      let btn, btnTxt
+      if (isMax) {
+        btn = this.add.rectangle(140, y, 60, 24, 0x555555, 0.9)
+        btnTxt = this.add.text(140, y, 'MAX', { fontSize: '11px', fontFamily: 'Arial', color: '#888888', fontStyle: 'bold' }).setOrigin(0.5)
+      } else {
+        btn = this.add.rectangle(140, y, 80, 24, canBuy ? 0x4caf50 : 0x444444, 0.9).setStrokeStyle(1, canBuy ? 0x66bb6a : 0x555555)
+        btnTxt = this.add.text(140, y, `${cost}🪙`, { fontSize: '11px', fontFamily: 'Arial', color: canBuy ? '#ffffff' : '#666666' }).setOrigin(0.5)
+        if (canBuy) {
+          btn.setInteractive({ useHandCursor: true })
+          btn.on('pointerdown', () => {
+            this.upgradeSystem.buy(def.id)
+            popup.destroy()
+          })
+        }
+      }
+
+      items.push(itemBg, iconTxt, nameTxt, levelTxt, btn, btnTxt)
+    })
+
+    const closeBtn = this.add.rectangle(0, 150, 100, 28, 0x4a90e2, 0.9).setInteractive({ useHandCursor: true })
+    const closeTxt = this.add.text(0, 150, 'Закрыть', { fontSize: '12px', fontFamily: 'Arial', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5)
+    closeBtn.on('pointerdown', () => popup.destroy())
+
+    popup.add([bg, title, ...items, closeBtn, closeTxt])
+  }
+
+  /* ==================== BOOSTS POPUP ==================== */
+  showBoosts() {
+    const popup = this.add.container(400, 300).setDepth(300)
+    const bg = this.add.rectangle(0, 0, 380, 320, 0x1a1a3e, 0.95).setStrokeStyle(2, 0xff9800, 0.8)
+
+    const title = this.add.text(0, -140, 'Бусты', { fontSize: '18px', fontFamily: 'Arial', color: '#ff9800', fontStyle: 'bold' }).setOrigin(0.5)
+
+    const boosts = BoostSystem.getAllBoosts()
+    const startY = -95
+    const yOffset = 80
+
+    boosts.forEach((def, i) => {
+      const y = startY + i * yOffset
+      const active = this.boostSystem.isActive(def.id)
+      const remaining = this.boostSystem.getRemainingSeconds(def.id)
+
+      const itemBg = this.add.rectangle(0, y, 350, 70, active ? 0x2c3e50 : 0x000000, 0.5).setStrokeStyle(1, active ? 0xff9800 : 0x4a90e2, 0.3)
+
+      this.add.text(-160, y - 18, def.icon, { fontSize: '16px', fontFamily: 'Arial' }).setOrigin(0, 0.5)
+      this.add.text(-140, y - 18, def.name, { fontSize: '13px', fontFamily: 'Arial', color: active ? '#ff9800' : '#ffffff', fontStyle: 'bold' }).setOrigin(0, 0.5)
+      this.add.text(-140, y + 4, def.desc, { fontSize: '10px', fontFamily: 'Arial', color: '#aaaaaa' }).setOrigin(0, 0.5)
+
+      if (active) {
+        const timeTxt = this.add.text(0, y + 20, `Осталось: ${remaining}с`, { fontSize: '11px', fontFamily: 'Arial', color: '#ff9800', fontStyle: 'bold' }).setOrigin(0.5)
+        itemBg.add(timeTxt)
+      } else {
+        // Кнопка "Реклама"
+        const adBtn = this.add.rectangle(-70, y + 20, 70, 22, 0xff9800, 0.9).setStrokeStyle(1, 0xffb74d).setInteractive({ useHandCursor: true })
+        this.add.text(-70, y + 20, 'Реклама', { fontSize: '9px', fontFamily: 'Arial', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5)
+        adBtn.on('pointerdown', () => {
+          yandexManager.showRewardedVideo(() => {
+            this.boostSystem.activate(def.id, true)
+            popup.destroy()
+          })
+        })
+
+        // Кнопка "Купить"
+        const canBuy = this.coins >= def.coinCost
+        const buyBtn = this.add.rectangle(70, y + 20, 70, 22, canBuy ? 0x4caf50 : 0x444444, 0.9).setStrokeStyle(1, canBuy ? 0x66bb6a : 0x555555)
+        const buyTxt = this.add.text(70, y + 20, `${def.coinCost}🪙`, { fontSize: '9px', fontFamily: 'Arial', color: canBuy ? '#ffffff' : '#666666' }).setOrigin(0.5)
+        if (canBuy) {
+          buyBtn.setInteractive({ useHandCursor: true })
+          buyBtn.on('pointerdown', () => {
+            this.boostSystem.activate(def.id)
+            popup.destroy()
+          })
+        }
+      }
+    })
+
+    const closeBtn = this.add.rectangle(0, 130, 100, 28, 0x4a90e2, 0.9).setInteractive({ useHandCursor: true })
+    const closeTxt = this.add.text(0, 130, 'Закрыть', { fontSize: '12px', fontFamily: 'Arial', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5)
+    closeBtn.on('pointerdown', () => popup.destroy())
+
+    popup.add([bg, title, closeBtn, closeTxt])
+  }
+
   /* ==================== SETTINGS ==================== */
   showSettings() {
     const popup = this.add.container(400, 300).setDepth(300)
@@ -494,7 +689,13 @@ export default class BootScene extends Phaser.Scene {
     const panels = []
     for (let r = 0; r < this.ROWS; r++) { for (let c = 0; c < this.COLS; c++) { const p = this.gridCells[r][c].panel; if (p) panels.push({ row: r, col: c, tier: p.tier }) } }
     this.lastSaveTime = Date.now()
-    await CloudSaveManager.save({ panels, coins: this.coins, completedOrders: this.completedOrders, lastSaveTime: this.lastSaveTime, orders: this.orderSystem.orders, completedCount: this.orderSystem.completedCount, totalRewardedAdsWatched: this.orderSystem.totalRewardedAdsWatched })
+    await CloudSaveManager.save({
+      panels, coins: this.coins, completedOrders: this.completedOrders, lastSaveTime: this.lastSaveTime,
+      orders: this.orderSystem.orders, completedCount: this.orderSystem.completedCount,
+      totalRewardedAdsWatched: this.orderSystem.totalRewardedAdsWatched,
+      upgradeLevels: this.upgradeSystem.levels,
+      activeBoosts: this.boostSystem.activeBoosts,
+    })
   }
 
   loadLocalGame() {
@@ -505,6 +706,8 @@ export default class BootScene extends Phaser.Scene {
     if (data.orders && data.orders.length > 0) { this.orderSystem.orders = data.orders } else { this.orderSystem.refillOrders(this.orderSystem.getMaxPanelTier()) }
     if (data.completedCount !== undefined) this.orderSystem.completedCount = data.completedCount
     if (data.totalRewardedAdsWatched !== undefined) this.orderSystem.totalRewardedAdsWatched = data.totalRewardedAdsWatched
+    if (data.upgradeLevels) { this.upgradeSystem.levels = data.upgradeLevels }
+    if (data.activeBoosts) { this.boostSystem.activeBoosts = data.activeBoosts }
   }
 
   checkOfflineBonus() {

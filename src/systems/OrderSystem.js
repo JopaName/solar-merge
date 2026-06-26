@@ -23,7 +23,13 @@ export default class OrderSystem {
     const minEnergy = 50
     const maxEnergy = Math.max(minEnergy, (maxPanelTier || 1) * 100)
     const requiredEnergy = Phaser.Math.Between(minEnergy, maxEnergy)
-    const rewardCoins = requiredEnergy * 2
+    let rewardCoins = requiredEnergy * 2
+    if (this.scene.upgradeSystem) {
+      rewardCoins = Math.floor(rewardCoins * this.scene.upgradeSystem.getRewardMultiplier())
+    }
+    if (this.scene.boostSystem) {
+      rewardCoins = Math.floor(rewardCoins * this.scene.boostSystem.getCoinMultiplier())
+    }
 
     return {
       id: nextOrderId++,

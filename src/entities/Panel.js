@@ -82,6 +82,18 @@ export default class Panel extends Phaser.GameObjects.Container {
     this.setPosition(x, y)
   }
 
+  /** Мощность с учётом апгрейда эффективности и буста x2 */
+  getEffectivePower() {
+    let p = this.power
+    if (this.scene.upgradeSystem) {
+      p *= this.scene.upgradeSystem.getPanelMultiplier()
+    }
+    if (this.scene.boostSystem && this.scene.boostSystem.getEnergyMultiplier() > 1) {
+      p *= this.scene.boostSystem.getEnergyMultiplier()
+    }
+    return Math.floor(p)
+  }
+
   destroy() {
     super.destroy()
   }
