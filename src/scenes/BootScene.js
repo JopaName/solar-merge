@@ -18,6 +18,17 @@ export default class BootScene extends Phaser.Scene {
   constructor() { super('BootScene') }
 
   preload() {
+    const w = this.cameras.main.width
+    const h = this.cameras.main.height
+    const barBg = this.add.rectangle(w / 2, h / 2 + 40, 200, 16, 0x333333).setDepth(100)
+    const barFill = this.add.rectangle(w / 2 - 98, h / 2 + 40, 0, 12, 0x4fc3f7).setOrigin(0, 0.5).setDepth(101)
+    const loadText = this.add.text(w / 2, h / 2, 'Загрузка...', { fontSize: '14px', fontFamily: 'Arial', color: '#ffffff' }).setOrigin(0.5).setDepth(101)
+
+    this.load.on('progress', (val) => {
+      barFill.setSize(196 * val, 12)
+      loadText.setText(`Загрузка: ${Math.floor(val * 100)}%`)
+    })
+
     for (let i = 1; i <= 10; i++) this.load.image(`panel_${i}`, `assets/panels/panel_${i}.png`)
   }
 
@@ -67,6 +78,8 @@ export default class BootScene extends Phaser.Scene {
     this.time.addEvent({ delay: 1000, loop: true, callback: () => this.updateBoostTimer() })
     this.time.addEvent({ delay: 30000, loop: true, callback: () => this.comboSystem.tryAutoMerge() })
     this.time.addEvent({ delay: 10000, loop: true, callback: () => this.checkGridFull() })
+    // Throttled UI refresh — every 500ms instead of every frame
+    this.time.addEvent({ delay: 500, loop: true, callback: () => { if (this._needsUiRefresh) { this._needsUiRefresh = false; this.refreshTopBarUI() } } })
     this.time.delayedCall(500, () => this.tutorial.start())
   }
 
@@ -147,7 +160,7 @@ export default class BootScene extends Phaser.Scene {
     }
   }
 
-  refreshCoinsUI() { this.topCoinsText.setText(`🪙 ${this.coins}`); this.refreshShopButtons() }
+  refreshCoinsUI() { this.topCoinsText.setText(`🪙 ${this.coins}`); this.refreshShopButtons(); this._needsUiRefresh = true }
 
   createLeftPanel() {
     const x = 15, y = 455, w = 160, h = 130
@@ -232,7 +245,7 @@ export default class BootScene extends Phaser.Scene {
   updateEnergy() {
     this.energy = 0
     for (let r = 0; r < this.ROWS; r++) for (let c = 0; c < this.COLS; c++) if (this.gridCells[r][c].occupied && this.gridCells[r][c].panel) this.energy += this.gridCells[r][c].panel.getEffectivePower()
-    this.refreshTopBarUI(); this.refreshOrdersUI()
+    this._needsUiRefresh = true; this.refreshOrdersUI()
     this.achievementSystem.addProgress('first_energy', this.energy)
     this.achievementSystem.addProgress('energy_mid', this.energy)
     this.achievementSystem.addProgress('energy_master', this.energy)

@@ -11,8 +11,14 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
-    minify: 'esbuild',
+    minify: 'terser',
     cssMinify: true,
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true,
+      },
+    },
     rollupOptions: {
       output: {
         manualChunks: {
@@ -20,6 +26,7 @@ export default defineConfig({
         },
       },
     },
+    chunkSizeWarningLimit: 2000,
   },
 
   assetsInclude: ['**/*.png', '**/*.jpg', '**/*.svg', '**/*.gif', '**/*.webp', '**/*.mp3', '**/*.ogg', '**/*.wav'],
