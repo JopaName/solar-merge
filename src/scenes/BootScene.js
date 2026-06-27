@@ -13,6 +13,7 @@ import DailyRewards from '../systems/DailyRewards.js'
 import AchievementSystem from '../systems/AchievementSystem.js'
 import LotterySystem from '../systems/LotterySystem.js'
 import PremiumSystem from '../systems/PremiumSystem.js'
+import { analytics } from '../utils/Analytics.js'
 
 export default class BootScene extends Phaser.Scene {
   constructor() { super('BootScene') }
@@ -81,6 +82,10 @@ export default class BootScene extends Phaser.Scene {
     // Throttled UI refresh — every 500ms instead of every frame
     this.time.addEvent({ delay: 500, loop: true, callback: () => { if (this._needsUiRefresh) { this._needsUiRefresh = false; this.refreshTopBarUI() } } })
     this.time.delayedCall(500, () => this.tutorial.start())
+    analytics.gameStart()
+
+    // Track session end on close
+    window.addEventListener('beforeunload', () => analytics.trackSessionEnd())
   }
 
   async initSdkAndCloud() {
@@ -303,6 +308,7 @@ export default class BootScene extends Phaser.Scene {
     for (let j = 0; j < (doubled ? 5 : 3); j++) this.time.delayedCall(j * 60, () => this.particles.flyTo(585 + 105, 40 + index * 115, this.topCoinsText.x + 10, this.topCoinsText.y, 0xffd700))
     this.coins += reward; this.completedOrders++
     if (doubled) this.orderSystem.totalRewardedAdsWatched++
+    analytics.orderComplete(o.city, o.requiredEnergy, reward)
 
     // 10% chance to spawn Piggy Bank
     if (Math.random() < 0.1) {
@@ -394,6 +400,7 @@ export default class BootScene extends Phaser.Scene {
     this.gridCells[cell.row][cell.col].occupied = true; this.gridCells[cell.row][cell.col].panel = panel
     this.tweens.add({ targets: panel, y: pos.y, scale: 1, duration: 400, ease: 'Back.easeOut' })
 
+    analytics.shopPurchase(panelType || `panel_t${tier}`, cost)
     if (panelType === 'golden') this.toast.show('✨ Золотая панель! x5 энергии!', 'success')
 
     for (let j = 0; j < 3; j++) this.time.delayedCall(j * 100, () => this.particles.flyTo(this.topCoinsText.x + 10, this.topCoinsText.y, pos.x + Phaser.Math.Between(-15, 15), pos.y, 0xffd700))
@@ -924,6 +931,8 @@ export default class BootScene extends Phaser.Scene {
     const cell = this.gridCells[row][col]
     let newTier = p1.tier + 1
     const tx = cell.x, ty = cell.y
+
+    analytics.merge(p1.tier, p2.tier, newTier)
 
     // Critical merge check
     if (p1.tier <= 5 && this.comboSystem.checkCritical()) {

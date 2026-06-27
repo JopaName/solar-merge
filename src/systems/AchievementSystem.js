@@ -105,6 +105,8 @@ const ALL_ACHIEVEMENTS = [
   },
 ]
 
+import { analytics } from '../utils/Analytics.js'
+
 export default class AchievementSystem {
   constructor(scene) {
     this.scene = scene
@@ -168,6 +170,7 @@ export default class AchievementSystem {
 
     this.scene.refreshCoinsUI()
     this.scene.saveGame()
+    analytics.achievementUnlocked(def.id)
 
     // Попап
     this.scene.showAchievementPopup(def)
