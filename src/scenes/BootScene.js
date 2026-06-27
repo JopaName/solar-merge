@@ -11,6 +11,8 @@ import BoostSystem from '../systems/BoostSystem.js'
 import ComboCriticalSystem from '../systems/ComboCriticalSystem.js'
 import DailyRewards from '../systems/DailyRewards.js'
 import AchievementSystem from '../systems/AchievementSystem.js'
+import LotterySystem from '../systems/LotterySystem.js'
+import PremiumSystem from '../systems/PremiumSystem.js'
 
 export default class BootScene extends Phaser.Scene {
   constructor() { super('BootScene') }
@@ -31,6 +33,12 @@ export default class BootScene extends Phaser.Scene {
     this.comboSystem = new ComboCriticalSystem(this)
     this.dailyRewards = new DailyRewards(this)
     this.achievementSystem = new AchievementSystem(this)
+    this.lotterySystem = new LotterySystem(this)
+    this.premiumSystem = new PremiumSystem(this)
+    this.freePanelTimer = 0
+    this.lastEnergyBoostTime = 0
+    this.dailyAdBonusClaimed = false
+    this.lastDailyBonusDate = null
     this.tutorial = new Tutorial(this)
 
     this.COLS = 5; this.ROWS = 5; this.CELL_SIZE = 72; this.GRID_X = 195; this.GRID_Y = 85
@@ -58,6 +66,7 @@ export default class BootScene extends Phaser.Scene {
     this.energyTimer = this.time.addEvent({ delay: 2000, loop: true, callback: () => this.collectEnergyParticles() })
     this.time.addEvent({ delay: 1000, loop: true, callback: () => this.updateBoostTimer() })
     this.time.addEvent({ delay: 30000, loop: true, callback: () => this.comboSystem.tryAutoMerge() })
+    this.time.addEvent({ delay: 10000, loop: true, callback: () => this.checkGridFull() })
     this.time.delayedCall(500, () => this.tutorial.start())
   }
 
@@ -92,6 +101,19 @@ export default class BootScene extends Phaser.Scene {
     this.add.text(735, 18, '⬆️', { fontSize: '16px' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(1).on('pointerdown', () => this.showUpgrades())
     this.boostTimerText = this.add.text(735, 42, '', { fontSize: '8px', fontFamily: 'Arial', color: '#ff9800' }).setOrigin(0.5).setDepth(1)
     this.add.text(755, 30, '🚀', { fontSize: '16px' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(1).on('pointerdown', () => this.showBoosts())
+    // Energy boost button (visible when energy > 1000)
+    this.energyBoostBtn = this.add.text(70, 20, '', { fontSize: '9px', color: '#4fc3f7', fontStyle: 'bold', backgroundColor: '#ffffff15', padding: { x: 4, y: 2 } }).setOrigin(0, 0.5).setDepth(1).setInteractive({ useHandCursor: true })
+    this.energyBoostBtn.on('pointerdown', () => {
+      if (this.energy < 1000) { this.toast.show('Нужно 1000 энергии для активации!', 'info'); return }
+      const cd = 10 * 60 * 1000
+      if (Date.now() - this.lastEnergyBoostTime < cd) { this.toast.show('Доступно раз в 10 минут!', 'info'); return }
+      yandexManager.showRewardedVideo(() => {
+        this.boostSystem.activate('energy_x2', true)
+        this.lastEnergyBoostTime = Date.now()
+        this.toast.show('x2 Энергия на 5 минут!', 'success')
+        this.energyBoostBtn.setText('')
+      })
+    })
     this.dailyBtnText = this.add.text(772, 18, '🎁', { fontSize: '14px' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(1).on('pointerdown', () => this.showDailyRewards())
     this.add.text(772, 44, '🏆', { fontSize: '14px' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(1).on('pointerdown', () => this.showAchievements())
     this.add.text(790, 30, '⚙️', { fontSize: '16px' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(1).on('pointerdown', () => this.showSettings())
@@ -113,6 +135,15 @@ export default class BootScene extends Phaser.Scene {
       this.comboCountText.setText(`🔥${this.comboSystem.comboCount}/3`)
     } else {
       this.comboCountText.setText('')
+    }
+    // Energy boost button visibility
+    if (this.energyBoostBtn) {
+      if (this.energy >= 1000) {
+        this.energyBoostBtn.setText('⚡ x2 за рекламу')
+        this.energyBoostBtn.setVisible(true)
+      } else {
+        this.energyBoostBtn.setVisible(false)
+      }
     }
   }
 
@@ -267,7 +298,7 @@ export default class BootScene extends Phaser.Scene {
     }
 
     this.refreshCoinsUI(); this.refreshOrdersUI(); this.refreshCityVisualization(); this.refreshTopBarUI()
-    if (this.orderSystem.shouldShowInterstitial()) yandexManager.showInterstitial()
+    if (this.orderSystem.shouldShowInterstitial()) yandexManager.showInterstitial(this.premiumSystem.hasNoAds())
     this.achievementSystem.addProgress('first_order')
     this.achievementSystem.addProgress('orders_mid')
     this.achievementSystem.addProgress('orders_master')
@@ -278,14 +309,51 @@ export default class BootScene extends Phaser.Scene {
   createShopBottom() {
     const y = 555
     this.add.rectangle(400, y, 800, 50, 0x000000, 0.5).setDepth(0)
-    this.add.rectangle(200, y, 150, 34, 0x4a90e2, 0.9).setStrokeStyle(1, 0x6ab0ff).setInteractive({ useHandCursor: true }).setDepth(1).on('pointerdown', () => this.buyPanel(1, 50)).on('pointerover', function() { if (this.input.enabled) this.setFillStyle(0x5aa0f2) }).on('pointerout', function() { if (this.input.enabled) this.setFillStyle(0x4a90e2) })
-    this.add.text(200, y, '🟦 T1 (50)', { fontSize: '12px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5).setDepth(1)
-    this.add.rectangle(350, y, 150, 34, 0x4a90e2, 0.9).setStrokeStyle(1, 0x6ab0ff).setInteractive({ useHandCursor: true }).setDepth(1).on('pointerdown', () => this.buyPanel(2, 150)).on('pointerover', function() { if (this.input.enabled) this.setFillStyle(0x5aa0f2) }).on('pointerout', function() { if (this.input.enabled) this.setFillStyle(0x4a90e2) })
-    this.add.text(350, y, '🟦 T2 (150)', { fontSize: '12px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5).setDepth(1)
-    this.add.rectangle(500, y, 150, 34, 0x9b59b6, 0.9).setStrokeStyle(1, 0xbb8fce).setInteractive({ useHandCursor: true }).setDepth(1).on('pointerdown', () => this.buyPanel(0, 500, 'booster'))
-    this.add.text(500, y, '🟣 Бустер (500)', { fontSize: '12px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5).setDepth(1)
-    this.add.rectangle(660, y, 100, 34, 0xf39c12, 0.9).setStrokeStyle(1, 0xf5b842).setInteractive({ useHandCursor: true }).setDepth(1).on('pointerdown', () => this.toast.show('Бонус будет доступен каждые 24ч!', 'info'))
-    this.add.text(660, y, '🎁 Бонус', { fontSize: '12px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5).setDepth(1)
+    // T1
+    const t1 = this.add.rectangle(130, y, 86, 34, 0x4a90e2, 0.9).setStrokeStyle(1, 0x6ab0ff).setInteractive({ useHandCursor: true }).setDepth(1)
+    t1.on('pointerdown', () => this.buyPanel(1, 50)); this.add.text(130, y, 'T1 50', { fontSize: '11px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5).setDepth(1)
+    // T2
+    this.add.rectangle(225, y, 86, 34, 0x4a90e2, 0.9).setStrokeStyle(1, 0x6ab0ff).setInteractive({ useHandCursor: true }).setDepth(1).on('pointerdown', () => this.buyPanel(2, 150))
+    this.add.text(225, y, 'T2 150', { fontSize: '11px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5).setDepth(1)
+    // Booster
+    this.add.rectangle(320, y, 86, 34, 0x9b59b6, 0.9).setStrokeStyle(1, 0xbb8fce).setInteractive({ useHandCursor: true }).setDepth(1).on('pointerdown', () => this.buyPanel(0, 500, 'booster'))
+    this.add.text(320, y, 'Бустер', { fontSize: '10px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5).setDepth(1)
+    // Free panel ad
+    const freePanelCooldown = 30 * 60 * 1000
+    const canFree = Date.now() - (this.lastFreePanelTime || 0) >= freePanelCooldown
+    this.freePanelBtn = this.add.rectangle(420, y, 120, 34, canFree ? 0x4caf50 : 0x444444, 0.9).setStrokeStyle(1, canFree ? 0x66bb6a : 0x555555).setDepth(1)
+    this.freePanelTxt = this.add.text(420, y, canFree ? '📺 Бесплатно' : '⏳ 30м', { fontSize: '9px', color: canFree ? '#ffffff' : '#888888', fontStyle: 'bold' }).setOrigin(0.5).setDepth(1)
+    if (canFree) {
+      this.freePanelBtn.setInteractive({ useHandCursor: true })
+      this.freePanelBtn.on('pointerdown', () => {
+        yandexManager.showRewardedVideo(() => {
+          const e = []; for (let r = 0; r < this.ROWS; r++) for (let c = 0; c < this.COLS; c++) if (!this.gridCells[r][c].occupied) e.push({ row: r, col: c })
+          if (e.length === 0) { this.toast.show('Сетка заполнена!', 'error'); return }
+          const cell = Phaser.Math.RND.pick(e); this.spawnPanelAt(1, cell.row, cell.col)
+          this.lastFreePanelTime = Date.now(); this.toast.show('Бесплатная панель T1 получена!', 'success'); this.saveGame()
+          this.freePanelBtn.setFillStyle(0x444444); this.freePanelTxt.setText('⏳ 30м'); this.freePanelBtn.disableInteractive()
+        })
+      })
+    }
+    // Lottery
+    const canLottery = this.lotterySystem.canSpin()
+    this.add.rectangle(550, y, 86, 34, 0xff9800, 0.9).setStrokeStyle(1, 0xffb74d).setInteractive({ useHandCursor: true }).setDepth(1).on('pointerdown', () => this.showLottery())
+    this.add.text(550, y, '🎰 Лотерея', { fontSize: '10px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5).setDepth(1)
+    // Daily ad bonus
+    const today = new Date().toISOString().split('T')[0]
+    const canDailyBonus = !this.dailyAdBonusClaimed || this.lastDailyBonusDate !== today
+    if (canDailyBonus) {
+      this.add.rectangle(650, y, 100, 34, 0xf39c12, 0.9).setStrokeStyle(1, 0xf5b842).setInteractive({ useHandCursor: true }).setDepth(1).on('pointerdown', () => {
+        yandexManager.showRewardedVideo(() => {
+          this.coins += 500; this.dailyAdBonusClaimed = true; this.lastDailyBonusDate = today
+          const boosts = ['energy_x2', 'coins_x3']
+          this.boostSystem.activate(Phaser.Math.RND.pick(boosts), true)
+          this.refreshCoinsUI(); this.toast.show('Ежедневный бонус: +500🪙 + буст!', 'success'); this.saveGame()
+          this.scene.restart()
+        })
+      })
+      this.add.text(650, y, '📺 Бонус дня', { fontSize: '9px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5).setDepth(1)
+    }
   }
 
   refreshShopButtons() {
@@ -528,6 +596,119 @@ export default class BootScene extends Phaser.Scene {
     close.on('pointerdown', () => { bg.destroy(); t1.destroy(); t2.destroy(); t3.destroy(); close.destroy() })
   }
 
+  /* ==================== LOTTERY ==================== */
+  showLottery() {
+    const popup = this.add.container(400, 300).setDepth(300)
+    this.add.rectangle(0, 0, 300, 270, 0x1a1a3e, 0.95).setStrokeStyle(2, 0xff9800, 0.8)
+    this.add.text(0, -110, '🎰 Лотерея', { fontSize: '18px', color: '#ff9800', fontStyle: 'bold' }).setOrigin(0.5)
+    this.add.text(0, -80, 'Крути и выигрывай призы!', { fontSize: '12px', color: '#aaaaaa' }).setOrigin(0.5)
+
+    this.lotteryPopupText = this.add.text(0, -30, 'Нажми "Крутить"', { fontSize: '16px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5)
+
+    // Spin button
+    const spinAd = this.add.rectangle(-60, 20, 110, 30, 0xff9800, 0.9).setStrokeStyle(1, 0xffb74d).setInteractive({ useHandCursor: true })
+    this.add.text(-60, 20, '📺 Крутить', { fontSize: '12px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5)
+    spinAd.on('pointerdown', () => {
+      if (!this.lotterySystem.canSpin()) { this.toast.show('Подождите 5 минут!', 'info'); return }
+      yandexManager.showRewardedVideo(() => {
+        this.lotterySystem.spinAnimation(() => {
+          const prize = this.lotterySystem.spin()
+          if (prize) {
+            this.lotteryPopupText.setText(`🎉 ${prize.icon} ${prize.name}!`)
+            this.toast.show(`Лотерея: ${prize.name}!`, 'success')
+          }
+        })
+      })
+    })
+
+    const spinCoin = this.add.rectangle(60, 20, 110, 30, 0x4caf50, 0.9).setStrokeStyle(1, 0x66bb6a).setInteractive({ useHandCursor: true })
+    this.add.text(60, 20, '100🪙 Крутить', { fontSize: '11px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5)
+    spinCoin.on('pointerdown', () => {
+      if (!this.lotterySystem.canSpin()) { this.toast.show('Подождите 5 минут!', 'info'); return }
+      if (this.coins < 100) { this.toast.show('Недостаточно монет!', 'error'); return }
+      this.coins -= 100; this.refreshCoinsUI()
+      this.lotterySystem.spinAnimation(() => {
+        const prize = this.lotterySystem.spin()
+        if (prize) {
+          this.lotteryPopupText.setText(`🎉 ${prize.icon} ${prize.name}!`)
+          this.toast.show(`Лотерея: ${prize.name}!`, 'success')
+        }
+      })
+    })
+
+    // Cooldown text
+    this.lotteryCooldownTxt = this.add.text(0, 65, '', { fontSize: '10px', color: '#888888' }).setOrigin(0.5)
+
+    // Prize list
+    const prizes = LotterySystem.getPrizes()
+    let yPos = 85
+    prizes.forEach(p => {
+      this.add.text(-120, yPos, `${p.icon} ${p.name} (${p.weight}%)`, { fontSize: '9px', color: '#aaaaaa' }).setOrigin(0, 0.5)
+      yPos += 16
+    })
+
+    // Close
+    this.add.rectangle(0, 125, 80, 24, 0x4a90e2, 0.9).setInteractive({ useHandCursor: true }).on('pointerdown', () => popup.destroy())
+    this.add.text(0, 125, 'Закрыть', { fontSize: '11px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5)
+
+    // Update cooldown
+    const updateCd = () => {
+      const rem = this.lotterySystem.getRemainingSeconds()
+      if (this.lotteryCooldownTxt && rem > 0) this.lotteryCooldownTxt.setText(`Кулдаун: ${Math.floor(rem / 60)}м ${rem % 60}с`)
+      else if (this.lotteryCooldownTxt) this.lotteryCooldownTxt.setText('Готово!')
+    }
+    updateCd()
+    const cdInterval = setInterval(() => { if (this.lotteryCooldownTxt) { updateCd() } else { clearInterval(cdInterval) } }, 1000)
+  }
+
+  /* ==================== SAVE FROM LOSS ==================== */
+  checkGridFull() {
+    let full = true
+    for (let r = 0; r < this.ROWS; r++) for (let c = 0; c < this.COLS; c++) if (!this.gridCells[r][c].occupied) { full = false; break }
+    if (!full) return
+
+    // Can we complete any order?
+    let canAny = false
+    for (const o of this.orderSystem.orders) if (this.energy >= o.requiredEnergy) { canAny = true; break }
+    if (canAny) return
+
+    // Show save popup
+    if (this._savingActive) return
+    this._savingActive = true
+
+    const popup = this.add.container(400, 300).setDepth(300)
+    const bg = this.add.rectangle(0, 0, 340, 150, 0x1a1a3e, 0.95).setStrokeStyle(2, 0xff4444, 0.8)
+    const t1 = this.add.text(0, -50, 'Сетка заполнена!', { fontSize: '16px', color: '#ff4444', fontStyle: 'bold' }).setOrigin(0.5)
+    const t2 = this.add.text(0, -25, 'Посмотри рекламу чтобы удалить\n3 случайные панели T1-3', { fontSize: '12px', color: '#ffffff', align: 'center' }).setOrigin(0.5)
+
+    const adBtn = this.add.rectangle(-60, 20, 110, 28, 0xff9800, 0.9).setStrokeStyle(1, 0xffb74d).setInteractive({ useHandCursor: true })
+    this.add.text(-60, 20, '📺 Спасти', { fontSize: '11px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5)
+    adBtn.on('pointerdown', () => {
+      yandexManager.showRewardedVideo(() => {
+        let removed = 0
+        for (let r = 0; r < this.ROWS && removed < 3; r++) for (let c = 0; c < this.COLS && removed < 3; c++) {
+          const p = this.gridCells[r][c].panel
+          if (p && p.tier <= 3 && !p.isGolden && !p.isBooster && !p.isPiggy) {
+            p.destroy(); this.gridCells[r][c].occupied = false; this.gridCells[r][c].panel = null; removed++
+          }
+        }
+        if (removed > 0) { this.updateEnergy(); this.toast.show(`Удалено ${removed} панелей!`, 'success'); this.saveGame() }
+        popup.destroy(); this._savingActive = false
+      })
+    })
+
+    const buyBtn = this.add.rectangle(80, 20, 110, 28, 0x9b59b6, 0.9).setStrokeStyle(1, 0xbb8fce).setInteractive({ useHandCursor: true })
+    this.add.text(80, 20, 'Купить бустер', { fontSize: '10px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5)
+    buyBtn.on('pointerdown', () => {
+      if (this.coins >= 500) { this.buyPanel(0, 500, 'booster'); popup.destroy(); this._savingActive = false }
+      else { this.toast.show('Недостаточно монет!', 'error') }
+    })
+
+    const close = this.add.rectangle(0, 60, 80, 24, 0x888888, 0.9).setInteractive({ useHandCursor: true })
+    this.add.text(0, 60, 'Закрыть', { fontSize: '11px', color: '#ffffff' }).setOrigin(0.5)
+    close.on('pointerdown', () => { popup.destroy(); this._savingActive = false })
+  }
+
   showSettings() {
     const popup = this.add.container(400, 300).setDepth(300)
     this.add.rectangle(0, 0, 300, 240, 0x1a1a3e, 0.95).setStrokeStyle(2, 0x4a90e2, 0.8)
@@ -536,9 +717,24 @@ export default class BootScene extends Phaser.Scene {
     const snd = this.add.rectangle(80, -50, 60, 24, this.soundEnabled ? 0x4caf50 : 0x555555, 0.9).setInteractive({ useHandCursor: true }).on('pointerdown', () => { this.soundEnabled = !this.soundEnabled; snd.setFillStyle(this.soundEnabled ? 0x4caf50 : 0x555555) })
     this.add.text(-100, -10, `Музыка: ${this.musicEnabled ? 'Вкл' : 'Выкл'}`, { fontSize: '13px', color: '#ffffff' }).setOrigin(0, 0.5)
     const msc = this.add.rectangle(80, -10, 60, 24, this.musicEnabled ? 0x4caf50 : 0x555555, 0.9).setInteractive({ useHandCursor: true }).on('pointerdown', () => { this.musicEnabled = !this.musicEnabled; msc.setFillStyle(this.musicEnabled ? 0x4caf50 : 0x555555) })
-    this.add.rectangle(0, 50, 160, 30, 0xff4444, 0.9).setInteractive({ useHandCursor: true }).on('pointerdown', () => { CloudSaveManager.reset(); this.scene.restart() })
-    this.add.text(0, 50, 'Сбросить прогресс', { fontSize: '12px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5)
-    this.add.text(0, 90, 'Solar Merge v1.0', { fontSize: '11px', color: '#555555' }).setOrigin(0.5)
+    // Premium
+    if (this.premiumSystem.isPremium) {
+      this.add.text(0, 50, '👑 Премиум активен', { fontSize: '13px', color: '#ffd700', fontStyle: 'bold' }).setOrigin(0.5)
+    } else {
+      this.add.text(0, 40, `Премиум: ${this.premiumSystem.getProgress()}/5`, { fontSize: '12px', color: '#aaaaaa' }).setOrigin(0.5)
+      const premBtn = this.add.rectangle(0, 65, 180, 24, 0xffd700, 0.9).setInteractive({ useHandCursor: true })
+      this.add.text(0, 65, '👑 Смотреть рекламу', { fontSize: '10px', color: '#333', fontStyle: 'bold' }).setOrigin(0.5)
+      premBtn.on('pointerdown', () => {
+        yandexManager.showRewardedVideo(() => {
+          this.premiumSystem.watchAdForPremium()
+          this.toast.show(`${this.premiumSystem.getProgress()}/5 реклам просмотрено для Премиума!`, 'info')
+          this.saveGame()
+        })
+      })
+    }
+    this.add.rectangle(0, 95, 160, 26, 0xff4444, 0.9).setInteractive({ useHandCursor: true }).on('pointerdown', () => { CloudSaveManager.reset(); this.scene.restart() })
+    this.add.text(0, 95, 'Сбросить прогресс', { fontSize: '11px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5)
+    this.add.text(0, 130, 'Solar Merge v1.0', { fontSize: '11px', color: '#555555' }).setOrigin(0.5)
     this.add.rectangle(0, 120, 100, 28, 0x4a90e2, 0.9).setInteractive({ useHandCursor: true }).on('pointerdown', () => popup.destroy())
     this.add.text(0, 120, 'Закрыть', { fontSize: '12px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5)
   }
@@ -567,6 +763,12 @@ export default class BootScene extends Phaser.Scene {
       // Achievements
       achievementProgress: this.achievementSystem.progress,
       unlockedAchievements: this.achievementSystem.unlocked,
+      // Monetization
+      premiumActive: this.premiumSystem.isPremium,
+      premiumAdsWatched: this.premiumSystem.adsWatchedForPremium,
+      lastFreePanelTime: this.lastFreePanelTime,
+      dailyAdBonusClaimed: this.dailyAdBonusClaimed,
+      lastDailyBonusDate: this.lastDailyBonusDate,
     })
   }
 
@@ -587,6 +789,11 @@ export default class BootScene extends Phaser.Scene {
     // Achievements
     if (data.achievementProgress) this.achievementSystem.progress = data.achievementProgress
     if (data.unlockedAchievements) this.achievementSystem.unlocked = data.unlockedAchievements
+    if (data.premiumActive) this.premiumSystem.isPremium = data.premiumActive
+    if (data.premiumAdsWatched) this.premiumSystem.adsWatchedForPremium = data.premiumAdsWatched
+    this.lastFreePanelTime = data.lastFreePanelTime || 0
+    this.dailyAdBonusClaimed = data.dailyAdBonusClaimed || false
+    this.lastDailyBonusDate = data.lastDailyBonusDate || null
     this.achievementSystem.refreshAll()
   }
 
