@@ -9,6 +9,8 @@ import Tutorial from '../systems/Tutorial.js'
 import UpgradeSystem, { UPGRADES } from '../systems/UpgradeSystem.js'
 import BoostSystem from '../systems/BoostSystem.js'
 import ComboCriticalSystem from '../systems/ComboCriticalSystem.js'
+import DailyRewards from '../systems/DailyRewards.js'
+import AchievementSystem from '../systems/AchievementSystem.js'
 
 export default class BootScene extends Phaser.Scene {
   constructor() { super('BootScene') }
@@ -27,6 +29,8 @@ export default class BootScene extends Phaser.Scene {
     this.upgradeSystem = new UpgradeSystem(this)
     this.boostSystem = new BoostSystem(this)
     this.comboSystem = new ComboCriticalSystem(this)
+    this.dailyRewards = new DailyRewards(this)
+    this.achievementSystem = new AchievementSystem(this)
     this.tutorial = new Tutorial(this)
 
     this.COLS = 5; this.ROWS = 5; this.CELL_SIZE = 72; this.GRID_X = 195; this.GRID_Y = 85
@@ -88,7 +92,9 @@ export default class BootScene extends Phaser.Scene {
     this.add.text(735, 18, '⬆️', { fontSize: '16px' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(1).on('pointerdown', () => this.showUpgrades())
     this.boostTimerText = this.add.text(735, 42, '', { fontSize: '8px', fontFamily: 'Arial', color: '#ff9800' }).setOrigin(0.5).setDepth(1)
     this.add.text(755, 30, '🚀', { fontSize: '16px' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(1).on('pointerdown', () => this.showBoosts())
-    this.add.text(775, 30, '⚙️', { fontSize: '18px' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(1).on('pointerdown', () => this.showSettings())
+    this.dailyBtnText = this.add.text(772, 18, '🎁', { fontSize: '14px' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(1).on('pointerdown', () => this.showDailyRewards())
+    this.add.text(772, 44, '🏆', { fontSize: '14px' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(1).on('pointerdown', () => this.showAchievements())
+    this.add.text(790, 30, '⚙️', { fontSize: '16px' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(1).on('pointerdown', () => this.showSettings())
     this.sdkIndicator = this.add.text(775, 55, '⏳', { fontSize: '10px', color: '#ffaa00' }).setOrigin(0.5).setDepth(1)
   }
 
@@ -159,6 +165,7 @@ export default class BootScene extends Phaser.Scene {
     this.progressFill.setSize(((count % 3) / 3) * 138, 6)
     this.progressText.setText(`${count % 3}/3 до след. уровня`)
     this.refreshAutoMergeBtn()
+    this.achievementSystem.checkCityLevel()
   }
 
   drawGrid() {
@@ -195,6 +202,9 @@ export default class BootScene extends Phaser.Scene {
     this.energy = 0
     for (let r = 0; r < this.ROWS; r++) for (let c = 0; c < this.COLS; c++) if (this.gridCells[r][c].occupied && this.gridCells[r][c].panel) this.energy += this.gridCells[r][c].panel.getEffectivePower()
     this.refreshTopBarUI(); this.refreshOrdersUI()
+    this.achievementSystem.addProgress('first_energy', this.energy)
+    this.achievementSystem.addProgress('energy_mid', this.energy)
+    this.achievementSystem.addProgress('energy_master', this.energy)
   }
 
   collectEnergyParticles() {
@@ -258,6 +268,10 @@ export default class BootScene extends Phaser.Scene {
 
     this.refreshCoinsUI(); this.refreshOrdersUI(); this.refreshCityVisualization(); this.refreshTopBarUI()
     if (this.orderSystem.shouldShowInterstitial()) yandexManager.showInterstitial()
+    this.achievementSystem.addProgress('first_order')
+    this.achievementSystem.addProgress('orders_mid')
+    this.achievementSystem.addProgress('orders_master')
+    if (doubled) this.achievementSystem.addProgress('generous')
     this.saveGame()
   }
 
@@ -374,6 +388,146 @@ export default class BootScene extends Phaser.Scene {
     this.add.text(0, 130, 'Закрыть', { fontSize: '12px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5)
   }
 
+  /* ==================== DAILY REWARDS ==================== */
+  showDailyRewards() {
+    const popup = this.add.container(400, 300).setDepth(300)
+    this.add.rectangle(0, 0, 460, 390, 0x1a1a3e, 0.95).setStrokeStyle(2, 0xffd700, 0.8)
+    this.add.text(0, -170, 'Ежедневные награды', { fontSize: '16px', color: '#ffd700', fontStyle: 'bold' }).setOrigin(0.5)
+
+    const days = DailyRewards.getAllDays()
+    const claimed = this.dailyRewards.claimedDays
+    const canClaim = this.dailyRewards.canClaim()
+    const currentDay = this.dailyRewards.getCurrentDayIndex() + 1
+
+    for (let i = 0; i < Math.min(days.length, 30); i++) {
+      const d = days[i]
+      const col = i % 7, row = Math.floor(i / 7)
+      const cx = -150 + col * 42, cy = -130 + row * 52
+      const isClaimed = claimed.includes(d.day)
+      const isCurrent = d.day === currentDay && canClaim
+
+      let color = 0x333333
+      if (isClaimed) color = 0x2c3e50
+      else if (isCurrent) color = 0x4caf50
+      else if (d.day < currentDay) color = 0x444444
+
+      const cell = this.add.rectangle(cx, cy, 38, 46, color, 0.9).setStrokeStyle(1, isCurrent ? 0x66bb6a : 0x555555)
+      this.add.text(cx, cy - 10, d.icon, { fontSize: '14px' }).setOrigin(0.5)
+      this.add.text(cx, cy + 10, `${d.day}`, { fontSize: '9px', color: isCurrent ? '#ffffff' : isClaimed ? '#666666' : '#aaaaaa' }).setOrigin(0.5)
+
+      if (isClaimed) {
+        this.add.text(cx, cy, '✓', { fontSize: '16px', color: '#4caf50', fontStyle: 'bold' }).setOrigin(0.5)
+      }
+    }
+
+    // Кнопка "Забрать"
+    if (canClaim) {
+      const data = this.dailyRewards.getCurrentDayData()
+      this.add.text(0, 80, `День ${currentDay}: ${data.desc}`, { fontSize: '12px', color: '#ffffff' }).setOrigin(0.5)
+
+      const claimBtn = this.add.rectangle(-60, 110, 100, 28, 0x4caf50, 0.9).setStrokeStyle(1, 0x66bb6a).setInteractive({ useHandCursor: true })
+      this.add.text(-60, 110, 'Забрать', { fontSize: '12px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5)
+      claimBtn.on('pointerdown', () => {
+        const r = this.dailyRewards.claim(false)
+        if (r) { this.toast.show(`+${r.description}!`, 'success'); this.refreshCoinsUI(); this.refreshTopBarUI(); this.saveGame(); popup.destroy() }
+      })
+
+      const x2Btn = this.add.rectangle(60, 110, 120, 28, 0xff9800, 0.9).setStrokeStyle(1, 0xffb74d).setInteractive({ useHandCursor: true })
+      this.add.text(60, 110, 'x2 за рекламу', { fontSize: '11px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5)
+      x2Btn.on('pointerdown', () => {
+        yandexManager.showRewardedVideo(() => {
+          const r = this.dailyRewards.claim(true)
+          if (r) { this.toast.show(`x2: ${r.description}!`, 'success'); this.refreshCoinsUI(); this.refreshTopBarUI(); this.saveGame(); popup.destroy() }
+        })
+      })
+    } else {
+      this.add.text(0, 80, 'Награда уже получена сегодня!', { fontSize: '12px', color: '#888888' }).setOrigin(0.5)
+      this.add.text(0, 100, `День ${currentDay}/30`, { fontSize: '11px', color: '#aaaaaa' }).setOrigin(0.5)
+    }
+
+    this.add.rectangle(0, 150, 100, 28, 0x4a90e2, 0.9).setInteractive({ useHandCursor: true }).on('pointerdown', () => popup.destroy())
+    this.add.text(0, 150, 'Закрыть', { fontSize: '12px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5)
+  }
+
+  /* ==================== ACHIEVEMENTS ==================== */
+  showAchievements() {
+    const popup = this.add.container(400, 300).setDepth(300)
+    this.add.rectangle(0, 0, 460, 390, 0x1a1a3e, 0.95).setStrokeStyle(2, 0xffd700, 0.8)
+    this.add.text(0, -175, 'Достижения', { fontSize: '16px', color: '#ffd700', fontStyle: 'bold' }).setOrigin(0.5)
+
+    const categories = [
+      { id: 'merge', name: 'Слияние', icon: '🔀' },
+      { id: 'energy', name: 'Энергия', icon: '⚡' },
+      { id: 'orders', name: 'Заказы', icon: '📋' },
+      { id: 'city', name: 'Город', icon: '🏘️' },
+    ]
+
+    let activeCat = 'merge'
+    let startY = -140, yOffset = 58
+
+    const renderCategory = (catId) => {
+      // Remove old items
+      const items = popup.list.filter(o => o._isAchItem)
+      items.forEach(o => { o.destroy() })
+
+      const achs = this.achievementSystem.getByCategory(catId)
+      achs.forEach((a, i) => {
+        const y = startY + i * yOffset
+        const progress = this.achievementSystem.getProgress(a.id)
+        const unlocked = this.achievementSystem.isUnlocked(a.id)
+
+        const bg = this.add.rectangle(0, y, 420, 50, unlocked ? 0x2c3e50 : 0x000000, 0.4).setStrokeStyle(1, progress >= a.target ? 0x4caf50 : 0x4a90e2, 0.2)
+        bg._isAchItem = true
+
+        this.add.text(-200, y - 8, a.icon, { fontSize: '14px' }).setOrigin(0, 0.5)._isAchItem = true
+        this.add.text(-180, y - 8, a.name, { fontSize: '12px', color: unlocked ? '#888888' : '#ffffff', fontStyle: 'bold' }).setOrigin(0, 0.5)._isAchItem = true
+        this.add.text(-180, y + 10, a.desc, { fontSize: '10px', color: '#aaaaaa' }).setOrigin(0, 0.5)._isAchItem = true
+
+        if (unlocked) {
+          this.add.text(180, y, '✓', { fontSize: '18px', color: '#4caf50', fontStyle: 'bold' }).setOrigin(0.5)._isAchItem = true
+        } else {
+          const pct = Math.min(progress / a.target, 1)
+          this.add.text(170, y, `${Math.floor(pct * 100)}%`, { fontSize: '11px', color: '#aaaaaa' }).setOrigin(0.5)._isAchItem = true
+          // Progress bar
+          this.add.rectangle(180, y + 16, 60, 4, 0x333333, 0.8)._isAchItem = true
+          this.add.rectangle(150 + 30 * pct, y + 16, 60 * pct, 4, 0x4caf50).setOrigin(0, 0.5)._isAchItem = true
+        }
+      })
+    }
+
+    // Category tabs
+    categories.forEach((cat, i) => {
+      const cx = -150 + i * 90
+      const tab = this.add.rectangle(cx, -155, 80, 24, activeCat === cat.id ? 0x4a90e2 : 0x333333, 0.9).setInteractive({ useHandCursor: true }).setDepth(1)
+      this.add.text(cx, -155, `${cat.icon} ${cat.name}`, { fontSize: '9px', color: '#ffffff' }).setOrigin(0.5)
+
+      tab.on('pointerdown', () => {
+        activeCat = cat.id
+        renderCategory(cat.id)
+      })
+    })
+
+    renderCategory(activeCat)
+
+    this.add.rectangle(0, 160, 100, 28, 0x4a90e2, 0.9).setInteractive({ useHandCursor: true }).on('pointerdown', () => popup.destroy())
+    this.add.text(0, 160, 'Закрыть', { fontSize: '12px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5)
+  }
+
+  /* ==================== ACHIEVEMENT POPUP ==================== */
+  showAchievementPopup(def) {
+    const bg = this.add.rectangle(400, 300, 350, 140, 0x1a1a3e, 0.95).setStrokeStyle(2, 0xffd700, 0.8).setDepth(300)
+    const t1 = this.add.text(400, 260, '🏆 Достижение разблокировано!', { fontSize: '16px', color: '#ffd700', fontStyle: 'bold' }).setOrigin(0.5).setDepth(301)
+    const t2 = this.add.text(400, 285, `${def.icon} ${def.name}`, { fontSize: '14px', color: '#ffffff' }).setOrigin(0.5).setDepth(301)
+    let rewardStr = ''
+    if (def.reward.coins) rewardStr += `${def.reward.coins}🪙 `
+    if (def.reward.golden) rewardStr += `${def.reward.golden}✨ `
+    if (def.reward.boost) rewardStr += `Буст `
+    const t3 = this.add.text(400, 310, `Награда: ${rewardStr}`, { fontSize: '12px', color: '#4caf50' }).setOrigin(0.5).setDepth(301)
+    const close = this.add.rectangle(400, 340, 100, 24, 0x4caf50, 0.9).setInteractive({ useHandCursor: true }).setDepth(301)
+    this.add.text(400, 340, 'OK', { fontSize: '12px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5).setDepth(302)
+    close.on('pointerdown', () => { bg.destroy(); t1.destroy(); t2.destroy(); t3.destroy(); close.destroy() })
+  }
+
   showSettings() {
     const popup = this.add.container(400, 300).setDepth(300)
     this.add.rectangle(0, 0, 300, 240, 0x1a1a3e, 0.95).setStrokeStyle(2, 0x4a90e2, 0.8)
@@ -400,7 +554,20 @@ export default class BootScene extends Phaser.Scene {
       }
     }
     this.lastSaveTime = Date.now()
-    await CloudSaveManager.save({ panels, coins: this.coins, completedOrders: this.completedOrders, lastSaveTime: this.lastSaveTime, orders: this.orderSystem.orders, completedCount: this.orderSystem.completedCount, totalRewardedAdsWatched: this.orderSystem.totalRewardedAdsWatched, upgradeLevels: this.upgradeSystem.levels, activeBoosts: this.boostSystem.activeBoosts, autoMergeUses: this.comboSystem.autoMergeUses })
+    await CloudSaveManager.save({
+      panels, coins: this.coins, completedOrders: this.completedOrders, lastSaveTime: this.lastSaveTime,
+      orders: this.orderSystem.orders, completedCount: this.orderSystem.completedCount,
+      totalRewardedAdsWatched: this.orderSystem.totalRewardedAdsWatched,
+      upgradeLevels: this.upgradeSystem.levels, activeBoosts: this.boostSystem.activeBoosts,
+      autoMergeUses: this.comboSystem.autoMergeUses,
+      // Daily rewards
+      dailyClaimedDays: this.dailyRewards.claimedDays,
+      dailyLastClaimDate: this.dailyRewards.lastClaimDate,
+      dailyCurrentDay: this.dailyRewards.currentDay,
+      // Achievements
+      achievementProgress: this.achievementSystem.progress,
+      unlockedAchievements: this.achievementSystem.unlocked,
+    })
   }
 
   loadLocalGame() {
@@ -413,6 +580,14 @@ export default class BootScene extends Phaser.Scene {
     if (data.upgradeLevels) this.upgradeSystem.levels = data.upgradeLevels
     if (data.activeBoosts) this.boostSystem.activeBoosts = data.activeBoosts
     this.comboSystem.autoMergeUses = data.autoMergeUses || 0
+    // Daily rewards
+    if (data.dailyClaimedDays) this.dailyRewards.claimedDays = data.dailyClaimedDays
+    if (data.dailyLastClaimDate) this.dailyRewards.lastClaimDate = data.dailyLastClaimDate
+    if (data.dailyCurrentDay) this.dailyRewards.currentDay = data.dailyCurrentDay
+    // Achievements
+    if (data.achievementProgress) this.achievementSystem.progress = data.achievementProgress
+    if (data.unlockedAchievements) this.achievementSystem.unlocked = data.unlockedAchievements
+    this.achievementSystem.refreshAll()
   }
 
   checkOfflineBonus() {
@@ -559,5 +734,8 @@ export default class BootScene extends Phaser.Scene {
     })
 
     this.comboSystem.onMerge()
+    this.achievementSystem.addProgress('first_merge')
+    this.achievementSystem.addProgress('merge_master')
+    this.achievementSystem.addProgress('merge_legend')
   }
 }
