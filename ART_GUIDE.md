@@ -1,83 +1,73 @@
-# Гайд по генерации арта для Solar Merge
+# Руководство по графике для Solar Merge
 
-## Стиль
+## Стиль игры
 
-- **Flat vector** — плоские иконки без сложных теней
+- **Flat vector** — плоские иконки, минимум теней
 - **Яркие цвета** — насыщенные оттенки, контрастные
-- **Чистые линии** — минимум деталей, читаемость в 64x64
+- **Чистые линии** — минимум деталей, читаемость в 64×64
 - **Прозрачный фон (PNG)** — для наложения на игровую сцену
 
-## Размеры
+## Технические требования
 
-- Каждый спрайт: **64x64 пикселей**
+- Размер каждого спрайта: **64×64 пикселя**
 - Фон: **прозрачный**
 - Формат: **PNG-24**
-- Имя файла: `panel_1.png`, `panel_2.png`, ... `panel_10.png`
+- Имя файла: `panel_1.png`, `panel_2.png` ... `panel_10.png`
+- Папка: `assets/panels/`
 
-## Панели по уровням
+## Промпты для генерации
 
-| Tier | Название | Цвет | Описание иконки |
-|------|----------|------|-----------------|
-| 1 | Маленькая панель | Серый #808080 | Простая квадратная солнечная панель |
-| 2 | Улучшенная панель | Серый #909090 | Панель с небольшим блеском |
-| 3 | Эффективная панель | Серый #a0a0a0 | Панель с солнечными лучами |
-| 4 | Синяя батарея | Синий #4a90e2 | Панель синего оттенка с молнией |
-| 5 | Мощная батарея | Синий #5aa0f2 | Две соединённые панели |
-| 6 | Солнечный блок | Синий #6ab0ff | Панель с солнцем в центре |
-| 7 | Золотая панель | Золотой #f39c12 | Золотая панель с искрами |
-| 8 | Платиновая панель | Золотой #f5b842 | Панель с короной |
-| 9 | Имперская панель | Золотой #f7c842 | Панель с драгоценным камнем |
-| 10 | Легендарная панель | Цветной градиент | Анимированная панель с радужным свечением |
-
-## Промпты для AI-генерации
-
-### Midjourney / Leonardo.ai
-
-Tier 1:
-```
-flat vector icon, small solar panel, gray color #808080, simple square shape, clean minimal design, 64x64 pixels, transparent background, game asset --ar 1:1
-```
-
-Tier 4:
-```
-flat vector icon, blue solar battery #4a90e2, lightning symbol, bright clean design, 64x64 pixels, transparent background, game asset --ar 1:1
-```
-
-Tier 7:
-```
-flat vector icon, golden solar panel #f39c12, sparkle effects, premium shiny design, 64x64 pixels, transparent background, game asset --ar 1:1
-```
-
-Tier 10:
-```
-flat vector icon, rainbow gradient legendary solar panel, glowing aura, epic mythical design, 64x64 pixels, transparent background, game asset --ar 1:1
-```
-
-### Stable Diffusion
+Общий шаблон для Midjourney / Stable Diffusion / Leonardo.ai:
 
 ```
-game icon, flat vector, solar panel, {color}, simple, clean, transparent background, 64x64, pixel art style
+Game asset, solar panel level {tier}, flat vector design, isometric view,
+clean lines, {color} colors, transparent background, no shadows, UI element,
+64x64 pixels --no text, watermarks
 ```
 
-## Бесплатные альтернативы
+| Tier | Цветовая схема | Описание иконки |
+|------|----------------|-----------------|
+| 1 | gray and white | Простая квадратная солнечная панель |
+| 2 | light gray and white | Панель с небольшим блеском |
+| 3 | silver and white | Панель с солнечными лучами |
+| 4 | blue and white | Синяя панель с молнией |
+| 5 | bright blue and white | Две соединённые панели |
+| 6 | deep blue and white | Панель с солнцем в центре |
+| 7 | gold and yellow | Золотая панель с искрами |
+| 8 | bright gold and white | Панель с короной |
+| 9 | rich gold and warm | Панель с драгоценным камнем |
+| 10 | rainbow gradient | Легендарная панель с радужным свечением |
 
-Если нет доступа к AI-генераторам, используй готовые ассеты:
+## Сервисы для генерации
 
-1. **Kenney.nl** — https://kenney.nl/assets?q=solar
-   - Наборы: "Solar System", "Space Kit"
-   - Бесплатно, CC0 лицензия
+| Сервис | Стоимость | Качество |
+|--------|-----------|----------|
+| [Midjourney](https://midjourney.com) | Платный ($10/мес) | Высокое |
+| [Stable Diffusion](https://stability.ai) | Бесплатно (локально) | Высокое |
+| [Leonardo.ai](https://leonardo.ai) | Бесплатные кредиты | Среднее |
+| [Tensor.art](https://tensor.art) | Бесплатные кредиты | Среднее |
 
-2. **OpenGameArt.org** — https://opengameart.org/
-   - Поиск: "solar panel icon", "energy icon"
-   - Бесплатно, различные лицензии
+## Бесплатные ассеты (альтернатива)
 
-3. **Game-Icons.net** — https://game-icons.net/
-   - Поиск: "sun", "lightning", "battery"
-   - Бесплатно, CC BY 3.0
+- [Kenney.nl](https://kenney.nl) — CC0, наборы иконок
+- [OpenGameArt.org](https://opengameart.org) — различные лицензии
+- [itch.io](https://itch.io/game-assets) — бесплатные и платные наборы
+- [Game-Icons.net](https://game-icons.net) — CC BY 3.0
 
-4. **Flaticon.com** — https://www.flaticon.com/
-   - Поиск: "solar panel", "sun energy"
-   - Бесплатно с указанием авторства
+## Удаление фона
+
+- **Онлайн:** [remove.bg](https://remove.bg) (бесплатно 1 изображение)
+- **Локально:** `pip install rembg` (Python, бесплатно)
+- **Пакетная обработка:**
+  ```python
+  from rembg import remove
+  from PIL import Image
+  import os
+  for f in os.listdir('input/'):
+      img = Image.open(f'input/{f}')
+      out = remove(img)
+      out.save(f'output/{f}')
+  ```
 
 ## Установка спрайтов
 
@@ -86,4 +76,4 @@ game icon, flat vector, solar panel, {color}, simple, clean, transparent backgro
 3. Положи в папку `assets/panels/`
 4. Перезапусти игру: `npm run dev`
 
-Если спрайтов нет — игра работает с Rectangle fallback.
+Если спрайтов нет — игра автоматически использует Rectangle fallback.

@@ -30,6 +30,10 @@ export default class BootScene extends Phaser.Scene {
       loadText.setText(`Загрузка: ${Math.floor(val * 100)}%`)
     })
 
+    this.load.on('loaderror', (file) => {
+      console.warn(`Не удалось загрузить ${file.key}, используем fallback`)
+    })
+
     for (let i = 1; i <= 10; i++) this.load.image(`panel_${i}`, `assets/panels/panel_${i}.png`)
   }
 

@@ -14,7 +14,6 @@ function getStyle(tier) {
 export default class Panel extends Phaser.GameObjects.Container {
   constructor(scene, x, y, tier) {
     super(scene, x, y)
-
     this.tier = tier
     this.power = tier * 10
     this.gridX = -1
@@ -32,8 +31,7 @@ export default class Panel extends Phaser.GameObjects.Container {
     const key = `panel_${this.tier}`
     const hasSprite = scene.textures.exists(key)
 
-    // Тень
-    this.shadow = scene.add.ellipse(2, 66, 50, 12, 0x000000, 0.3)
+    this.shadow = scene.add.ellipse(2, 40, 60, 20, 0x000000, 0.3)
     this.add(this.shadow)
 
     if (hasSprite) {
@@ -47,14 +45,11 @@ export default class Panel extends Phaser.GameObjects.Container {
       this.fallbackRect.setStrokeStyle(2, style.stroke, 1)
       this.add(this.fallbackRect)
       this.setSize(64, 64)
-
       if (this.tier === 10) {
         scene.tweens.add({
           targets: this.fallbackRect,
           alpha: { from: 1, to: 0.3 },
-          duration: 500,
-          yoyo: true,
-          repeat: -1,
+          duration: 500, yoyo: true, repeat: -1,
         })
       }
     }
@@ -62,7 +57,7 @@ export default class Panel extends Phaser.GameObjects.Container {
     this.label = scene.add.text(0, hasSprite ? 36 : 0, `${this.tier}`, {
       fontSize: hasSprite ? '12px' : '20px',
       fontFamily: 'Arial',
-      color: hasSprite ? '#ffffff' : '#ffffff',
+      color: '#ffffff',
       fontStyle: 'bold',
       stroke: hasSprite ? '#000000' : undefined,
       strokeThickness: hasSprite ? 3 : 0,
@@ -73,28 +68,16 @@ export default class Panel extends Phaser.GameObjects.Container {
     this.setDepth(1)
   }
 
-  setGridPos(gx, gy) {
-    this.gridX = gx
-    this.gridY = gy
-  }
+  setGridPos(gx, gy) { this.gridX = gx; this.gridY = gy }
 
-  setPanelPosition(x, y) {
-    this.setPosition(x, y)
-  }
+  setPanelPosition(x, y) { this.setPosition(x, y) }
 
-  /** Мощность с учётом апгрейда эффективности и буста x2 */
   getEffectivePower() {
     let p = this.power
-    if (this.scene.upgradeSystem) {
-      p *= this.scene.upgradeSystem.getPanelMultiplier()
-    }
-    if (this.scene.boostSystem && this.scene.boostSystem.getEnergyMultiplier() > 1) {
-      p *= this.scene.boostSystem.getEnergyMultiplier()
-    }
+    if (this.scene.upgradeSystem) p *= this.scene.upgradeSystem.getPanelMultiplier()
+    if (this.scene.boostSystem && this.scene.boostSystem.getEnergyMultiplier() > 1) p *= this.scene.boostSystem.getEnergyMultiplier()
     return Math.floor(p)
   }
 
-  destroy() {
-    super.destroy()
-  }
+  destroy() { super.destroy() }
 }
